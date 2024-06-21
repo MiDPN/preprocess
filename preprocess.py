@@ -4,8 +4,8 @@
 # and moves using RSYNC"
 #
 #__author__      = "Paul Gallagher"
-#--copyright--   = "CC0 - openly shared into the public domain on behalf of MDPN"
-#--version--     = 0.1 - MVP base
+#__copyright__   = "CC0 - openly shared into the public domain on behalf of MDPN"
+#__version__     = 0.1 - MVP base
 #########################################################
 
 import os
@@ -16,6 +16,7 @@ import shutil
 ############################## Configuration fields ################################
 source_dir = "/home/sftpuser/uploads/"
 destination_dir = "/var/www/html/staging"
+titledb = "/var/www/html/mdpn/titledb/titledb.xml"
 ###############################################################################3###
 
 ### functions
@@ -23,8 +24,10 @@ def run_clamav_scan(file_path):
     result = subprocess.run(['clamscan', file_path], capture_output=True, text=True)
     return result.returncode == 0
 
-def is_non_zero(file_path):
-    return os.path.getsize(file_path) > 0
+#has the file size definitions below 1byte to 50gb valid
+def is_right_size(file_path):
+    file_size = os.path.getsize(file_path)
+    return file_size > 0 and file_size < 5000000000
 
 def extract_and_convert_manifest(tar_file_path, extract_to):
     try:
@@ -56,6 +59,9 @@ def convert_to_html(file_path):
    # remove the manifest file
     os.remove(file_path)
 
+def insert_into_titledb(stuff, titledb):
+    return
+
 ################################### MAIN ENTRY #################################################
 ### main entry point triggered by __main__ below, handles all processing as branch statements
 ### and hands off to functions above
@@ -67,15 +73,18 @@ def process_tar_files(directory):
                 file_name = os.path.basename(file_path) #file_name
                 fname = os.path.splitext(file_name)     #file name without path or ext
 
-                if is_non_zero(file_path):
+                if is_right_size(file_path):
                     if run_clamav_scan(file_path):
                         if extract_and_convert_manifest(file_path, root):
                             #move the tarball into the folder with the manifest file
                             new_file = os.path.join(root, fname[0], file)
                             new_folder = os.path.join(root, fname[0])
-                            shutil.move(file_path, new_file)         #move into the AU folder 
-                            shutil.move(new_folder, destination_dir) #move into the production folder
-                            print(f"Processed {file_path} into {new_file} successfully, and moved to {destination_dir}.")
+                            shutil.move(file_path, new_file)         #move into the AU folder
+                            try:
+                                shutil.move(new_folder, destination_dir) #move into the production folder
+                                print(f"Processed {file_path} into {new_file} successfully, and moved to {destination_dir}.")
+                            except:
+                                print(f"Copy to production error, {file} already exists?")
                         else:
                             print(f"Error: Failed to extract manifest from {file_path}")
                     else:
