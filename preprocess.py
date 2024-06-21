@@ -53,20 +53,8 @@ def convert_to_html(file_path):
     with open(html_file_path, 'w') as html_file:
         html_file.write(html_content)
 
-   # remove teh manifest file
+   # remove the manifest file
     os.remove(file_path)
-
-def move_with_rsync(source, destination):
-    subprocess.run(['rsync', '-av', source, destination])
-
-def delete_folder(folder):
-    for filename in os.listdir(folder):
-        file_path = os.path.join(folder, filename)
-        try:
-            if os.path.isdir(file_path): 
-                shutil.rmtree(file_path)
-        except Exception as e:
-            print('Failed to delete %s. Reason: %s' % (file_path, e))
 
 ################################### MAIN ENTRY #################################################
 ### main entry point triggered by __main__ below, handles all processing as branch statements
@@ -75,17 +63,19 @@ def process_tar_files(directory):
     for root, _, files in os.walk(directory):
         for file in files:
             if file.endswith('.tar'):
-                file_path = os.path.join(root, file)
-                file_name = os.path.basename(file_path)
-                fname = os.path.splitext(file_name)
+                file_path = os.path.join(root, file)    #file path
+                file_name = os.path.basename(file_path) #file_name
+                fname = os.path.splitext(file_name)     #file name without path or ext
 
                 if is_non_zero(file_path):
                     if run_clamav_scan(file_path):
                         if extract_and_convert_manifest(file_path, root):
                             #move the tarball into the folder with the manifest file
-                            new_folder = os.path.join(root, fname[0], file)
-                            shutil.move(file_path, new_folder)
-                            print(f"Processed {file_path} into {new_folder} successfully.")
+                            new_file = os.path.join(root, fname[0], file)
+                            new_folder = os.path.join(root, fname[0])
+                            shutil.move(file_path, new_file)         #move into the AU folder 
+                            shutil.move(new_folder, destination_dir) #move into the production folder
+                            print(f"Processed {file_path} into {new_file} successfully, and moved to {destination_dir}.")
                         else:
                             print(f"Error: Failed to extract manifest from {file_path}")
                     else:
@@ -97,9 +87,3 @@ def process_tar_files(directory):
 if __name__ == "__main__":
     #do the main processing process_tar_files
     process_tar_files(source_dir)
-
-    #move the files, refactored this outside the main function, helps recusion issue when running on unprocessed files
-    move_with_rsync(source_dir, destination_dir)
-    
-    #delete the staging files, below works, but removes the institution folders
-    #delete_folder(source_dir)
