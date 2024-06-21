@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-#""Preprocess.py - examines uploaded tar files for validity, makes a manifest"
+#"preprocess.py - examines uploaded tar files for validity, makes a manifest"
 # and moves using RSYNC"
 #
 #__author__      = "Paul Gallagher"
