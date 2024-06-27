@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 #
 #"preprocess.py - examines uploaded tar files for validity, makes a manifest"
-# and moves using RSYNC"
+# adds entry into titledb, and moves into production"
 #
 #__author__      = "Paul Gallagher"
 #__copyright__   = "CC0 - openly shared into the public domain on behalf of MDPN"
-#__version__     = 0.1 - MVP base
+#__version__     = 0.2
 #########################################################
 
 import os
@@ -53,7 +53,6 @@ def extract_and_convert_manifest(tar_file_path, extract_to):
 def convert_to_html(file_path):
     with open(file_path, 'r') as file:
         content = file.read()
-    au_name = os.path.splitext(file_path)
 
    ## html template for manifest file ##
     html_content = f"<html><head><title>{file_path} MDPN LOCKSS Manifest Page</title></head><body><pre>{content}</pre>"       
@@ -147,8 +146,7 @@ def process_tar_files(directory):
                             try:    #try and parse the tarball, get the manifest and bag-info, and create manifest
                                 extract_and_convert_manifest(file_path, root)
                             except:
-                                print(f"Error: Failed to extract manifest from {file_path}")
-                                
+                                print(f"Error: Failed to extract manifest from {file_path}")                                
                             try:     #move the tarball into the folder with the manifest and bag-info file
                                 shutil.move(file_path, os.path.join(root, fname[0], file))         #move tarball into the AU folder
                             except:
