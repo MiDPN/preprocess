@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 source_dir = "/home/sftpuser/uploads/"
 destination_dir = "/var/www/html/staging"
 titledb = "/var/www/html/mdpn/titledb/titledb.xml"
-staging_url = "http://192.168.60.130"
+staging_url = "http://192.168.60.130/staging/"
 ###############################################################################3###
 
 ### functions
@@ -45,26 +45,34 @@ def extract_and_convert_manifest(tar_file_path, extract_to):
             member = tar.getmember(fname[0] + '/manifest-sha256.txt')
             tar.extract(member, path=extract_to)
             manifest_file_path = os.path.join(extract_to, fname[0], 'manifest-sha256.txt')
-            convert_to_html(manifest_file_path)
+            
+            #parse bag info, push bag-info fields into html manifest
+            baginfo = os.path.join(fname[0] + '/bag-info.txt')
+            with open(baginfo, 'r') as file:
+                content = file.readlines()
+
+            url = staging_url + fname[0]
+            convert_to_html(manifest_file_path, url, content[12].split(" ", 1)[1].strip())
+            
         return True
     except (tarfile.TarError, KeyError):
         return False
 
-def convert_to_html(file_path):
-    with open(file_path, 'r') as file:
+def convert_to_html(manifest_file_path, url, title):
+    with open(manifest_file_path, 'r') as file:
         content = file.read()
 
    ## html template for manifest file ##
-    html_content = f"<html><head><title>{file_path} MDPN LOCKSS Manifest Page</title></head><body><pre>{content}</pre>"       
+    html_content = f"<html><head><title>{title} - LOCKSS Manifest Page</title></head><body><h1><a href='{url}'>{title}</a></h1><pre>{content}</pre>"       
     html_content += '<p>LOCKSS system has permission to collect, preserve, and serve this Archival Unit</p></body></html>'    
 
-    html_file_path = os.path.join(os.path.dirname(file_path), 'manifest.html')
+    html_file_path = os.path.join(os.path.dirname(manifest_file_path), 'manifest.html')
 
     with open(html_file_path, 'w') as html_file:
         html_file.write(html_content)
 
    # remove the manifest file
-    os.remove(file_path)
+    os.remove(manifest_file_path)
 
 def insert_into_titledb(publisher, fname, title):
        
