@@ -5,7 +5,7 @@
 #
 #__author__      = "Paul Gallagher"
 #__copyright__   = "CC0 - openly shared into the public domain on behalf of MDPN"
-#__version__     = 0.2
+#__version__     = 0.3
 #########################################################
 
 import os
