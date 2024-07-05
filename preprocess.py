@@ -32,31 +32,28 @@ def is_right_size(file_path):
     return file_size > 0 and file_size < 5000000000
 
 def extract_and_convert_manifest(tar_file_path, extract_to):
-    try:
-        with tarfile.open(tar_file_path) as tar:
-            file_name = os.path.basename(tar_file_path)
-            fname = os.path.splitext(file_name) #filename minus extension
-            
-            #extract the bag-info file
-            member = tar.getmember(fname[0] + '/bag-info.txt')
-            tar.extract(member, path=extract_to)
-            
-            #extract the manifest file
-            member = tar.getmember(fname[0] + '/manifest-sha256.txt')
-            tar.extract(member, path=extract_to)
-            manifest_file_path = os.path.join(extract_to, fname[0], 'manifest-sha256.txt')
-            
-            #parse bag info, push bag-info fields into html manifest
-            baginfo = os.path.join(fname[0] + '/bag-info.txt')
-            with open(baginfo, 'r') as file:
-                content = file.readlines()
+    with tarfile.open(tar_file_path) as tar:
+        file_name = os.path.basename(tar_file_path)
+        fname = os.path.splitext(file_name) #filename minus extension
+        
+        #extract the bag-info file
+        member = tar.getmember(fname[0] + '/bag-info.txt')
+        tar.extract(member, path=extract_to)
+        
+        #extract the manifest file
+        member = tar.getmember(fname[0] + '/manifest-sha256.txt')
+        tar.extract(member, path=extract_to)
+        manifest_file_path = os.path.join(extract_to, fname[0], 'manifest-sha256.txt')
+        
+        #parse bag info, push bag-info fields into html manifest
+        baginfo = os.path.join(fname[0] + '/bag-info.txt')
+        with open(baginfo, 'r') as file:
+            content = file.readlines()
 
-            url = staging_url + fname[0]
-            convert_to_html(manifest_file_path, url, content[12].split(" ", 1)[1].strip())
-            
-        return True
-    except (tarfile.TarError, KeyError):
-        return False
+        url = staging_url + fname[0]
+        convert_to_html(manifest_file_path, url, content[12].split(" ", 1)[1].strip())
+        
+    return True
 
 def convert_to_html(manifest_file_path, url, title):
     with open(manifest_file_path, 'r') as file:
@@ -94,9 +91,14 @@ def insert_into_titledb(publisher, fname, title):
         jour.attrib["name"] = "journalTitle"
         jour.attrib["value"] = title
         new_au.append(jour)
+        #title (title)
+        titl = ET.Element('property')
+        titl.attrib["name"] = "title"
+        titl.attrib["value"] = title
+        new_au.append(titl)
         #type
         type = ET.Element('property')
-        type.attrib["type"] = "journal"
+        type.attrib["name"] = "type"
         type.attrib["value"] = "journal"
         new_au.append(type)
         #plugin
