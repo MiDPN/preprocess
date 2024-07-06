@@ -144,7 +144,8 @@ def insert_into_titledb(publisher, fname, title):
         
         #merge into the main element
         parent_element[1].append(new_au) #append to the second instance of property
-        tree.write(titledb, encoding='utf-8', xml_declaration=True)
+        ET.indent(tree, space="\t", level=0)
+        tree.write(titledb, encoding='utf-8')
 
 ################################### MAIN ENTRY #################################################
 ### main entry point triggered by __main__ below, handles all processing as branch statements
