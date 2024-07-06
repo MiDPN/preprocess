@@ -19,6 +19,7 @@ source_dir = "/home/sftpuser/uploads/"
 destination_dir = "/var/www/html/staging"
 titledb = "/var/www/html/mdpn/titledb/titledb.xml"
 staging_url = "http://192.168.60.130/staging/"
+max_au_size = 5000000000
 ###############################################################################3###
 
 ### functions
@@ -29,7 +30,7 @@ def run_clamav_scan(file_path):
 #has the file size definitions below 1byte to 50gb valid
 def is_right_size(file_path):
     file_size = os.path.getsize(file_path)
-    return file_size > 0 and file_size < 5000000000
+    return file_size > 0 and file_size < max_au_size
 
 def extract_and_convert_manifest(tar_file_path, extract_to):
     with tarfile.open(tar_file_path) as tar:
@@ -39,6 +40,7 @@ def extract_and_convert_manifest(tar_file_path, extract_to):
         #extract the bag-info file
         member = tar.getmember(fname[0] + '/bag-info.txt')
         tar.extract(member, path=extract_to)
+        baginfo_file_path = os.path.join(extract_to, fname[0], 'bag-info.txt')
         
         #extract the manifest file
         member = tar.getmember(fname[0] + '/manifest-sha256.txt')
@@ -51,16 +53,19 @@ def extract_and_convert_manifest(tar_file_path, extract_to):
             content = file.readlines()
 
         url = staging_url + fname[0]
-        convert_to_html(manifest_file_path, url, content[12].split(" ", 1)[1].strip())
+        convert_to_html(manifest_file_path, baginfo_file_path, url, content[12].split(" ", 1)[1].strip())
         
     return True
 
-def convert_to_html(manifest_file_path, url, title):
+def convert_to_html(manifest_file_path, baginfo_file_path, url, title):
     with open(manifest_file_path, 'r') as file:
         content = file.read()
+        
+    with open(baginfo_file_path, 'r') as file:
+        baginfo = file.read()
 
    ## html template for manifest file ##
-    html_content = f"<html><head><title>{title} - LOCKSS Manifest Page</title></head><body><h1><a href='{url}'>{title}</a></h1><pre>{content}</pre>"       
+    html_content = f"<html><head><title>{title} - LOCKSS Manifest Page</title></head><body><h1><a href='{url}'>{title}</a></h1><h3>bag-info.txt</h3><pre>{baginfo}</pre><h3>manifest-sha256.txt</h3><pre>{content}</pre>"       
     html_content += '<p>LOCKSS system has permission to collect, preserve, and serve this Archival Unit</p></body></html>'    
 
     html_file_path = os.path.join(os.path.dirname(manifest_file_path), 'manifest.html')
@@ -166,7 +171,7 @@ def process_tar_files(directory):
                                 baginfo = os.path.join(root, fname[0], "bag-info.txt")
                                 with open(baginfo, 'r') as file:
                                         content = file.readlines()
-                                insert_into_titledb( content[2].split(" ", 1)[1].strip(), fname[0], content[12].split(" ", 1)[1].strip()) 
+                                insert_into_titledb(content[2].split(" ", 1)[1].strip(), fname[0], content[12].split(" ", 1)[1].strip())
                             except:
                                 print("Error inserting into titledb")
                             
@@ -180,7 +185,7 @@ def process_tar_files(directory):
                         print(f"Error: ClamAV scan failed for {file_path}")
                         os.remove(file_path) #get that stuff out of here!
                 else:
-                    print(f"Error: {file_path} is zero bytes")
+                    print(f"Error: {file_path} is either zero bytes or greater than {max_au_size}")
 
 if __name__ == "__main__":
     #do the main processing process_tar_files
