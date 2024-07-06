@@ -25,6 +25,8 @@ max_au_size = 5000000000
 ### functions
 def run_clamav_scan(file_path):
     result = subprocess.run(['clamscan', file_path], capture_output=True, text=True)
+    f = open(file_path + '-clamav.txt', 'w')
+    f.write(result.stdout)
     return result.returncode == 0
 
 #has the file size definitions below 1byte to 50gb valid
@@ -65,7 +67,7 @@ def convert_to_html(manifest_file_path, baginfo_file_path, url, title):
         baginfo = file.read()
 
    ## html template for manifest file ##
-    html_content = f"<html><head><title>{title} - LOCKSS Manifest Page</title></head><body><h1><a href='{url}'>{title}</a></h1><h3>bag-info.txt</h3><pre>{baginfo}</pre><h3>manifest-sha256.txt</h3><pre>{content}</pre>"       
+    html_content = f"<html><head><title>{title} - LOCKSS Manifest Page</title></head><body><h1><a href='{url}'>{title}</a></h1><a href='bag-info.txt'><h3>bag-info.txt</h3></a><pre>{baginfo}</pre><h3>manifest-sha256.txt</h3><pre>{content}</pre>"       
     html_content += '<p>LOCKSS system has permission to collect, preserve, and serve this Archival Unit</p></body></html>'    
 
     html_file_path = os.path.join(os.path.dirname(manifest_file_path), 'manifest.html')
@@ -164,6 +166,7 @@ def process_tar_files(directory):
                                 print(f"Error: Failed to extract manifest from {file_path}")                                
                             try:     #move the tarball into the folder with the manifest and bag-info file
                                 shutil.move(file_path, os.path.join(root, fname[0], file))         #move tarball into the AU folder
+                                shutil.move(file_path + '-clamav.txt', os.path.join(root, fname[0], 'clamav.txt'))         #move clamav.txt into the AU folder
                             except:
                                 print("error moving tar into au folder")
 
