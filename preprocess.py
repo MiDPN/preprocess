@@ -5,7 +5,7 @@
 #
 #__author__      = "Paul Gallagher"
 #__copyright__   = "CC0 - openly shared into the public domain on behalf of MDPN"
-#__version__     = 0.3
+#__version__     = 0.4
 #########################################################
 
 import os
@@ -19,7 +19,7 @@ source_dir = "/home/sftpuser/uploads/"
 destination_dir = "/var/www/html/staging"
 titledb = "/var/www/html/mdpn/titledb/titledb.xml"
 staging_url = "http://192.168.60.130/staging/"
-max_au_size = 5000000000
+max_au_size = 5000000000   #50gb
 ###############################################################################3###
 
 ### functions
@@ -50,12 +50,11 @@ def extract_and_convert_manifest(tar_file_path, extract_to):
         manifest_file_path = os.path.join(extract_to, fname[0], 'manifest-sha256.txt')
         
         #parse bag info, push bag-info fields into html manifest
-        baginfo = os.path.join(fname[0] + '/bag-info.txt')
-        with open(baginfo, 'r') as file:
+        with open(baginfo_file_path, 'r') as file:
             content = file.readlines()
 
         url = staging_url + fname[0]
-        convert_to_html(manifest_file_path, baginfo_file_path, url, content[12].split(" ", 1)[1].strip())
+        convert_to_html(manifest_file_path, baginfo_file_path, url, content[10].split(" ", 1)[1].strip()) #manifest_file_path, baginfo_file_path, url, title
         
     return True
 
@@ -78,7 +77,7 @@ def convert_to_html(manifest_file_path, baginfo_file_path, url, title):
    # remove the manifest file
     os.remove(manifest_file_path)
 
-def insert_into_titledb(publisher, fname, title):
+def insert_into_titledb(publisher, fname, title, journal_title):
        
         #load the file
         tree = ET.parse(titledb)
@@ -96,7 +95,7 @@ def insert_into_titledb(publisher, fname, title):
         #journal title (title)
         jour = ET.Element('property')
         jour.attrib["name"] = "journalTitle"
-        jour.attrib["value"] = title
+        jour.attrib["value"] = journal_title
         new_au.append(jour)
         #title (title)
         titl = ET.Element('property')
@@ -163,28 +162,35 @@ def process_tar_files(directory):
                     if run_clamav_scan(file_path):
                             try:    #try and parse the tarball, get the manifest and bag-info, and create manifest
                                 extract_and_convert_manifest(file_path, root)
-                            except:
-                                print(f"Error: Failed to extract manifest from {file_path}")                                
+                            except Exception as error:
+                                print(f"Error: Failed to extract manifest from {file_path}", error)
+                                                             
                             try:     #move the tarball into the folder with the manifest and bag-info file
                                 shutil.move(file_path, os.path.join(root, fname[0], file))         #move tarball into the AU folder
                                 shutil.move(file_path + '-clamav.txt', os.path.join(root, fname[0], 'clamav.txt'))         #move clamav.txt into the AU folder
-                            except:
-                                print("error moving tar into au folder")
+                            except Exception as error:
+                                print("Error moving tar or clamav.txt into au folder" + error)
 
                             try:  #try to parse bag-info.txt and create the titledb                              
                                 baginfo = os.path.join(root, fname[0], "bag-info.txt")
                                 with open(baginfo, 'r') as file:
-                                        content = file.readlines()
-                                insert_into_titledb(content[2].split(" ", 1)[1].strip(), fname[0], content[12].split(" ", 1)[1].strip())
-                            except:
-                                print("Error inserting into titledb")
+                                        content = file.readlines() 
+
+                                #check that journal title (Bag-Group-Identifier) has data, if not, default to External-Identifer for the titledb
+                                journal_title = content[1].split(" ", 1)[1].strip()
+                                if not journal_title:
+                                    journal_title = content[10].split(" ", 1)[1].strip() #default to External-Identifer
+                                
+                                insert_into_titledb(content[15].split(" ", 1)[1].strip(), fname[0], content[10].split(" ", 1)[1].strip(), journal_title)    #publisher, fname, title, journal_title
+                            except Exception as error:
+                                print("Error inserting into titledb", error)
                             
                             try: #try to move the file to production folder
                                 #note, ran into a bug below if the staging folder isn't created, dumps file contents in the desination root
                                  au_folder = os.path.join(root, fname[0])
                                  shutil.move(au_folder, destination_dir) #move into the production folder
-                            except:
-                                print(f"Copy to production error, {file} already exists?")
+                            except Exception as error:
+                                print(f"Copy to production error, {file} already exists?", error)
                     else:
                         print(f"Error: ClamAV scan failed for {file_path}")
                         os.remove(file_path) #get that stuff out of here!
