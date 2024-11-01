@@ -6,6 +6,10 @@
 #__author__      = "Paul Gallagher"
 #__copyright__   = "CC0 - openly shared into the public domain on behalf of MDPN"
 #__version__     = 0.4
+# Runs without any options ie python3 ./preprocess.py
+# Expects the below configuration directories exist and have contents to process
+# and that there is a titledb.xml file in the location specified. max_au_size sets the
+# upper limit of the AU.
 #########################################################
 
 import os
@@ -15,10 +19,10 @@ import shutil
 import xml.etree.ElementTree as ET
 
 ############################## Configuration fields ################################
-source_dir = "/home/sftpuser/uploads/"
+source_dir = "/home/sftpuser/uploads/"  #works on all subfolders
 destination_dir = "/var/www/html/staging"
 titledb = "/var/www/html/mdpn/titledb/titledb.xml"
-staging_url = "http://192.168.60.130/staging/"
+staging_url = "http://192.168.60.130/staging/" #LOCKSS crawable URL
 max_au_size = 5000000000   #50gb
 ###############################################################################3###
 
