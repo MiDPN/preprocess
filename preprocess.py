@@ -5,24 +5,31 @@
 #
 #__author__      = "Paul Gallagher"
 #__copyright__   = "CC0 - openly shared into the public domain on behalf of MDPN"
-#__version__     = 0.4
+#__version__     = 0.6
 # Runs without any options ie python3 ./preprocess.py
 # Expects the below configuration directories exist and have contents to process
 # and that there is a titledb.xml file in the location specified. max_au_size sets the
 # upper limit of the AU.
+# requires pandas for html creation - pip install pandas
 #########################################################
 
 import os
+import re
 import subprocess
 import tarfile
 import shutil
 import xml.etree.ElementTree as ET
+import csv
+import datetime
+import pandas as pd
 
 ############################## Configuration fields ################################
 source_dir = "/home/sftpuser/uploads/"  #works on all subfolders
 destination_dir = "/var/www/html/staging"
 titledb = "/var/www/html/mdpn/titledb/titledb.xml"
 staging_url = "http://192.168.60.130/staging/" #LOCKSS crawable URL
+logfile = "/var/www/html/mdpn/log/log.csv"
+weblog = "/var/www/html/mdpn/log/log.html"
 max_au_size = 5000000000   #50gb
 ###############################################################################3###
 
@@ -58,8 +65,7 @@ def extract_and_convert_manifest(tar_file_path, extract_to):
             content = file.readlines()
 
         url = staging_url + fname[0]
-        convert_to_html(manifest_file_path, baginfo_file_path, url, content[10].split(" ", 1)[1].strip()) #manifest_file_path, baginfo_file_path, url, title
-        
+        convert_to_html(manifest_file_path, baginfo_file_path, url, content[10].split(" ", 1)[1].strip()) #manifest_file_path, baginfo_file_path, url, title   
     return True
 
 def convert_to_html(manifest_file_path, baginfo_file_path, url, title):
@@ -70,7 +76,7 @@ def convert_to_html(manifest_file_path, baginfo_file_path, url, title):
         baginfo = file.read()
 
    ## html template for manifest file ##
-    html_content = f"<html><head><title>{title} - LOCKSS Manifest Page</title></head><body><h1><a href='{url}'>{title}</a></h1><a href='bag-info.txt'><h3>bag-info.txt</h3></a><pre>{baginfo}</pre><h3>manifest-sha256.txt</h3><pre>{content}</pre>"       
+    html_content = f"<html><head><title>{title} - LOCKSS Manifest Page</title></head><body><h1><a href='{url}'>{title}</a></h1><a href='bag-info.txt'><h3>bag-info.txt</h3></a><pre>{baginfo}</pre><h3><a href='clamav.txt'>clamav.txt</a></h3><h3>manifest-sha256.txt</h3><pre>{content}</pre>"       
     html_content += '<p>LOCKSS system has permission to collect, preserve, and serve this Archival Unit</p></body></html>'    
 
     html_file_path = os.path.join(os.path.dirname(manifest_file_path), 'manifest.html')
@@ -150,6 +156,73 @@ def insert_into_titledb(publisher, fname, title, journal_title):
         ET.indent(tree, space="\t", level=0)
         tree.write(titledb, encoding='utf-8')
 
+def is_web_safe_filename(filename):
+    #check to see if a filename is websafe
+    # Define a regular expression for a web-safe file name
+    pattern = r'^[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9]$'
+    
+    # Check if the filename matches the pattern
+    if re.match(pattern, filename) and not filename.startswith(('.', '-')) and not filename.endswith(('.', '-')):
+        return True
+    return False
+
+def log_to_csv(filename, publisher, title, size, status, csv_filename=logfile):
+    # Define the header
+    headers = ["Date", "Filename", "Publisher", "Title", "Size", "Status"]
+    
+    # Check if the CSV file already exists
+    file_exists = False
+    try:
+        with open(csv_filename, 'r', newline='') as file:
+            file_exists = True
+    except FileNotFoundError:
+        file_exists = False
+    
+    # Open the CSV file in append mode
+    with open(csv_filename, 'a', newline='') as file:
+        writer = csv.writer(file)
+        
+        # Write the header only if the file doesn't exist
+        if not file_exists:
+            writer.writerow(headers)
+        
+        # Write the row with the provided information
+        writer.writerow([datetime.datetime.now(), filename, publisher, title, size, status])
+
+def csv_to_html(csv_filename, html_filename):
+    # Read the CSV file into a DataFrame
+    df = pd.read_csv(csv_filename)
+    
+    # Convert DataFrame to HTML format with table styling
+    html_content = df.to_html(index=False, classes="table table-striped", border=0)
+    
+    # Create a basic HTML structure and embed the table
+    #should refactor this to use a single template
+    html_page = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>MDPN Import Log</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; }}
+            .table {{ width: 100%; border-collapse: collapse; }}
+            .table th, .table td {{ padding: 8px; border: 1px solid #ddd; text-align: left; }}
+            .table th {{ background-color: #f2f2f2; }}
+        </style>
+    </head>
+    <body>
+        <h2>MDPN Import Log</h2> <a href="log.csv">log.csv download</a> 
+        {html_content}
+    </body>
+    </html>
+    """
+    
+    # Write the HTML content to a file
+    with open(html_filename, "w") as file:
+        file.write(html_page)
+
 ################################### MAIN ENTRY #################################################
 ### main entry point triggered by __main__ below, handles all processing as branch statements
 ### and hands off to functions above
@@ -160,46 +233,65 @@ def process_tar_files(directory):
                 file_path = os.path.join(root, file)    #file path
                 file_name = os.path.basename(file_path) #file name
                 fname = os.path.splitext(file_name)     #file name without path or ext in array
-                
+                status = ""
+                size = ""
+                    
                 #validity checks
-                if is_right_size(file_path):
-                    if run_clamav_scan(file_path):
-                            try:    #try and parse the tarball, get the manifest and bag-info, and create manifest
-                                extract_and_convert_manifest(file_path, root)
-                            except Exception as error:
-                                print(f"Error: Failed to extract manifest from {file_path}", error)
-                                                             
-                            try:     #move the tarball into the folder with the manifest and bag-info file
-                                shutil.move(file_path, os.path.join(root, fname[0], file))         #move tarball into the AU folder
-                                shutil.move(file_path + '-clamav.txt', os.path.join(root, fname[0], 'clamav.txt'))         #move clamav.txt into the AU folder
-                            except Exception as error:
-                                print("Error moving tar or clamav.txt into au folder" + error)
+                if is_web_safe_filename(fname[0]):      #check filename is websafe
+                    if is_right_size(file_path):        #check the file is under 50gb
+                        size = os.path.getsize(file_path) #store the size for the log if clear
+                        if run_clamav_scan(file_path):  #run the clamav scan, proceed if clear                      
+                                try:    #try and parse the tarball, get the manifest and bag-info, and create manifest
+                                    extract_and_convert_manifest(file_path, root)
+                                except Exception as error:
+                                    print(f"Error: Failed to extract manifest from {file_path}", error)
+                                                                
+                                try:     #move the tarball into the folder with the manifest and bag-info file
+                                    shutil.move(file_path, os.path.join(root, fname[0], file))         #move tarball into the AU folder
+                                    shutil.move(file_path + '-clamav.txt', os.path.join(root, fname[0], 'clamav.txt'))         #move clamav.txt into the AU folder
+                                except Exception as error:
+                                    print("Error moving tar or clamav.txt into au folder", error)
 
-                            try:  #try to parse bag-info.txt and create the titledb                              
-                                baginfo = os.path.join(root, fname[0], "bag-info.txt")
-                                with open(baginfo, 'r') as file:
-                                        content = file.readlines() 
+                                try:  #try to parse bag-info.txt and create the titledb                              
+                                    baginfo = os.path.join(root, fname[0], "bag-info.txt")
+                                    with open(baginfo, 'r') as file:
+                                            content = file.readlines() 
 
-                                #check that journal title (Bag-Group-Identifier) has data, if not, default to External-Identifer for the titledb
-                                journal_title = content[1].split(" ", 1)[1].strip()
-                                if not journal_title:
-                                    journal_title = content[10].split(" ", 1)[1].strip() #default to External-Identifer
+                                    #check that journal title (Bag-Group-Identifier) has data, if not, default to External-Identifer for the titledb
+                                    journal_title = content[1].split(" ", 1)[1].strip()
+                                    if not journal_title:
+                                        journal_title = content[10].split(" ", 1)[1].strip() #default to External-Identifer
+                                    
+                                    insert_into_titledb(content[15].split(" ", 1)[1].strip(), fname[0], content[10].split(" ", 1)[1].strip(), journal_title)    #publisher, fname, title, journal_title
+                                except Exception as error:
+                                    print("Error inserting into titledb", error)
                                 
-                                insert_into_titledb(content[15].split(" ", 1)[1].strip(), fname[0], content[10].split(" ", 1)[1].strip(), journal_title)    #publisher, fname, title, journal_title
-                            except Exception as error:
-                                print("Error inserting into titledb", error)
-                            
-                            try: #try to move the file to production folder
-                                #note, ran into a bug below if the staging folder isn't created, dumps file contents in the desination root
-                                 au_folder = os.path.join(root, fname[0])
-                                 shutil.move(au_folder, destination_dir) #move into the production folder
-                            except Exception as error:
-                                print(f"Copy to production error, {file} already exists?", error)
+                                try: #try to move the file to production folder
+                                    #note, ran into a bug below if the staging folder isn't created, dumps file contents in the desination root
+                                    au_folder = os.path.join(root, fname[0])
+                                    shutil.move(au_folder, destination_dir) #move into the production folder
+                                    status = "Loaded" #update status for the log to "loaded"
+                                except Exception as error:
+                                    print(f"Copy to production error, {file} already exists?", error)
+                                    status = "Copy to production error, {file} already exists?"
+                        else:
+                            print(f"Error: ClamAV scan failed for {file_path}, file removed")
+                            os.remove(file_path) #get that stuff out of here!
+                            os.remove(file_path + '-clamav.txt')
+                            status = "Error: ClamAV scan failed"
                     else:
-                        print(f"Error: ClamAV scan failed for {file_path}")
-                        os.remove(file_path) #get that stuff out of here!
+                        print(f"Error: {file_path} is either zero bytes or greater than {max_au_size}")
+                        status = "Error: File is either zero bytes or greater than max size" 
                 else:
-                    print(f"Error: {file_path} is either zero bytes or greater than {max_au_size}")
+                    print(f"Error: The AU named {fname[0]} is not web safe")
+                    status = "Error: The AU folder name is not web safe" 
+                
+                #update the log, logging only reports user "if" conditions, not exceptions which are admin side, except for production copy (duplicate)  
+                try: 
+                    log_to_csv(fname[0], content[15].split(" ", 1)[1].strip(), content[10].split(" ", 1)[1].strip(), size, status) #filename, publisher, title, size, status
+                    csv_to_html(logfile, weblog) #convert the logfile over to an HTML file
+                except Exception as error:
+                    print("Error inserting into logfile", error)
 
 if __name__ == "__main__":
     #do the main processing process_tar_files
