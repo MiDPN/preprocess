@@ -10,6 +10,8 @@
 # Expects the below configuration directories exist and have contents to process
 # and that there is a titledb.xml file in the location specified. max_au_size sets the
 # upper limit of the AU.
+#
+# REQUIREMENTS:
 # requires pandas for html creation - pip install pandas
 #########################################################
 
@@ -26,10 +28,10 @@ import pandas as pd
 ############################## Configuration fields ################################
 source_dir = "/home/sftpuser/uploads/"  #works on all subfolders
 destination_dir = "/var/www/html/staging"
-titledb = "/var/www/html/mdpn/titledb/titledb.xml"
-staging_url = "http://192.168.60.130/staging/" #LOCKSS crawable URL
-logfile = "/var/www/html/mdpn/log/log.csv"
-weblog = "/var/www/html/mdpn/log/log.html"
+titledb = "/var/www/html/mdpn/titledb/titledb.xml"  #this file needs to exist
+staging_url = "http://192.168.60.130/staging/"      #LOCKSS crawable URL
+logfile = "/var/www/html/mdpn/log/log.csv"          #creates on first run
+weblog = "/var/www/html/mdpn/log/log.html"          #updates per AU ie: as each log entry is added
 max_au_size = 5000000000   #50gb
 ###############################################################################3###
 
@@ -168,7 +170,7 @@ def is_web_safe_filename(filename):
 
 def log_to_csv(filename, publisher, title, size, status, csv_filename=logfile):
     # Define the header
-    headers = ["Date", "Filename", "Publisher", "Title", "Size", "Status"]
+    headers = ["Date", "Package Name", "Source-Organization", "External-Identifier", "Size (B)", "Status"]
     
     # Check if the CSV file already exists
     file_exists = False
@@ -213,8 +215,9 @@ def csv_to_html(csv_filename, html_filename):
         </style>
     </head>
     <body>
-        <h2>MDPN Import Log</h2> <a href="log.csv">log.csv download</a> 
+        <h2>MDPN Import Log</h2>
         {html_content}
+        <a href="log.csv">log.csv download</a> 
     </body>
     </html>
     """
@@ -234,12 +237,11 @@ def process_tar_files(directory):
                 file_name = os.path.basename(file_path) #file name
                 fname = os.path.splitext(file_name)     #file name without path or ext in array
                 status = ""
-                size = ""
+                size = os.path.getsize(file_path)
                     
                 #validity checks
                 if is_web_safe_filename(fname[0]):      #check filename is websafe
-                    if is_right_size(file_path):        #check the file is under 50gb
-                        size = os.path.getsize(file_path) #store the size for the log if clear
+                    if is_right_size(file_path):        #check the file is under max_au_size
                         if run_clamav_scan(file_path):  #run the clamav scan, proceed if clear                      
                                 try:    #try and parse the tarball, get the manifest and bag-info, and create manifest
                                     extract_and_convert_manifest(file_path, root)
@@ -270,21 +272,23 @@ def process_tar_files(directory):
                                     #note, ran into a bug below if the staging folder isn't created, dumps file contents in the desination root
                                     au_folder = os.path.join(root, fname[0])
                                     shutil.move(au_folder, destination_dir) #move into the production folder
-                                    status = "Loaded" #update status for the log to "loaded"
+                                    status = "Staged" #update status for the log to "Staged"
                                 except Exception as error:
-                                    print(f"Copy to production error, {file} already exists?", error)
-                                    status = "Copy to production error, {file} already exists?"
+                                    print(f"Copy to production error, {file} may already exist", error)
+                                    status = "Copy to production error, file may already exist"
                         else:
-                            print(f"Error: ClamAV scan failed for {file_path}, file removed")
-                            os.remove(file_path) #get that stuff out of here!
-                            os.remove(file_path + '-clamav.txt')
-                            status = "Error: ClamAV scan failed"
+                            print(f"Error: ClamAV scan failed for {file_path}, file deleted")
+                            os.remove(file_path) #remove file
+                            os.remove(file_path + '-clamav.txt') #remove the scan results file
+                            status = "Error: ClamAV scan failed, file deleted"
                     else:
-                        print(f"Error: {file_path} is either zero bytes or greater than {max_au_size}")
-                        status = "Error: File is either zero bytes or greater than max size" 
+                        print(f"Error: {file_path} is either zero bytes or greater than {max_au_size}, file deleted")
+                        os.remove(file_path) #remove file
+                        status = "Error: File is either zero bytes or greater than max size, file deleted"
                 else:
-                    print(f"Error: The AU named {fname[0]} is not web safe")
-                    status = "Error: The AU folder name is not web safe" 
+                    print(f"Error: The AU named {fname[0]} is not web safe, file deleted")
+                    os.remove(file_path) #remove file
+                    status = "Error: Package Name is not web safe, file deleted" 
                 
                 #update the log, logging only reports user "if" conditions, not exceptions which are admin side, except for production copy (duplicate)  
                 try: 
