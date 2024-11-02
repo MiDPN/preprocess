@@ -1,4 +1,5 @@
 #!/bin/bash
+# used to setup test environment for development, can be ignored for production use
 
 # Define directories
 UPLOADS_DIR="/var/www/sftpuser/uploads/WMU"

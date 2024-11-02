@@ -90,7 +90,6 @@ def convert_to_html(manifest_file_path, baginfo_file_path, url, title):
     os.remove(manifest_file_path)
 
 def insert_into_titledb(publisher, fname, title, journal_title):
-       
         #load the file
         tree = ET.parse(titledb)
         root = tree.getroot()
@@ -236,7 +235,6 @@ def process_tar_files(directory):
                 file_path = os.path.join(root, file)    #file path
                 file_name = os.path.basename(file_path) #file name
                 fname = os.path.splitext(file_name)     #file name without path or ext in array
-                status = ""
                 size = os.path.getsize(file_path)
                     
                 #validity checks
@@ -246,7 +244,7 @@ def process_tar_files(directory):
                                 try:    #try and parse the tarball, get the manifest and bag-info, and create manifest
                                     extract_and_convert_manifest(file_path, root)
                                 except Exception as error:
-                                    print(f"Error: Failed to extract manifest from {file_path}", error)
+                                    print(f"Error: Failed to extract manifest from {file_path}, possibly corrupted, uploading", error)
                                                                 
                                 try:     #move the tarball into the folder with the manifest and bag-info file
                                     shutil.move(file_path, os.path.join(root, fname[0], file))         #move tarball into the AU folder
@@ -274,8 +272,8 @@ def process_tar_files(directory):
                                     shutil.move(au_folder, destination_dir) #move into the production folder
                                     status = "Staged" #update status for the log to "Staged"
                                 except Exception as error:
-                                    print(f"Copy to production error, {file} may already exist", error)
-                                    status = "Copy to production error, file may already exist"
+                                    print(f"Copy to production error, {file} may already exist, be uploading, or corrupted", error)
+                                    status = "Copy to production error, file may already exist, be uploading, or corrupted"
                         else:
                             print(f"Error: ClamAV scan failed for {file_path}, file deleted")
                             os.remove(file_path) #remove file
@@ -284,13 +282,13 @@ def process_tar_files(directory):
                     else:
                         print(f"Error: {file_path} is either zero bytes or greater than {max_au_size}, file deleted")
                         os.remove(file_path) #remove file
-                        status = "Error: File is either zero bytes or greater than max size, file deleted"
+                        status = "Error: File is either zero bytes or greater than max size"
                 else:
                     print(f"Error: The AU named {fname[0]} is not web safe, file deleted")
                     os.remove(file_path) #remove file
                     status = "Error: Package Name is not web safe, file deleted" 
                 
-                #update the log, logging only reports user "if" conditions, not exceptions which are admin side, except for production copy (duplicate)  
+                #update the log, logging reports user "if" conditions, not exceptions which are admin side, except for production copy (duplicate)  
                 try: 
                     log_to_csv(fname[0], content[15].split(" ", 1)[1].strip(), content[10].split(" ", 1)[1].strip(), size, status) #filename, publisher, title, size, status
                     csv_to_html(logfile, weblog) #convert the logfile over to an HTML file
