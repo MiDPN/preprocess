@@ -15,6 +15,7 @@
 # requires pandas for html creation - pip install pandas
 # also requires droid: https://tna-cdn-live-uk.s3.eu-west-2.amazonaws.com/documents/droid-binary-6.8.0-bin.zip
 # droid uses java openjdk version 8 to 17, 17 tested here
+# droid needs to be updated periodically(daily?), create a cron job simular to the following: java -Xmx1024m -jar /PATH/TO/droid-command-line-6.8.0.jar -d
 #########################################################
 
 import os
@@ -39,6 +40,7 @@ max_au_size = 5000000000   #50gb
 ######## DROID Format Settings ########
 java_path = "/usr/lib/jvm/java-17-openjdk-amd64/bin/java"
 droid_path = "/home/aristotle23/droid/droid-command-line-6.8.0.jar"
+droid_log = "/var/www/html/mdpn/log/droid_log.csv"
 ###############################################################################3###
 
 ### functions
@@ -275,17 +277,16 @@ def process_tar_files(directory):
                                     
                                 try: #try and run the droid format scan, generate reports
                                     #generate the droid_report.csv file
-                                    subprocess.run([java_path, "-Xmx1024m", "-jar", droid_path, "-R", "-A", new_file_path, "-o", new_file_path + "/droid_report.csv" ], capture_output=True, text=True) 
-                                    #generate the droid_report.droid file
-                                    subprocess.run([java_path, "-Xmx1024m", "-jar", droid_path, "-R", "-A", new_file_path, "-p", new_file_path + "/droid_profile.droid" ], capture_output=True, text=True)
+                                    result = subprocess.run([java_path, "-Xmx1024m", "-jar", droid_path, "-R", "-A", new_file_path, "-o", new_file_path + "/droid_report.csv" ], capture_output=True, text=True)                                   
+                                    #generate the droid_report.droid file, not really sure we need this... 
+                                    # subprocess.run([java_path, "-Xmx1024m", "-jar", droid_path, "-R", "-A", new_file_path, "-p", new_file_path + "/droid_profile.droid" ], capture_output=True, text=True)
                                 except Exception as error:
-                                    print(f"Error conducting droid format scan", error)
+                                    print(f"Error conducting droid format scan", result, error)
                                 
                                 try: #try to move the file to production folder
                                     #note, ran into a bug below if the staging folder isn't created, dumps file contents in the desination root
-                                    au_folder = new_file_path
-                                    shutil.move(au_folder, destination_dir) #move into the production folder
-                                    status = "Staged" #update status for the log to "Staged"
+                                    shutil.move(new_file_path, destination_dir)     #move into the production folder
+                                    status = "Staged"                           #update status for the log to "Staged"
                                 except Exception as error:
                                     print(f"Error: Copy to production error, {file} may already exist, be uploading, or corrupted", error)
                                     status = "Error: Copy to production error, file may already exist, be uploading, or corrupted"
@@ -307,6 +308,24 @@ def process_tar_files(directory):
                 try: 
                     log_to_csv(fname[0], content[15].split(" ", 1)[1].strip(), content[10].split(" ", 1)[1].strip(), size, status) #filename, publisher, title, size, status
                     csv_to_html(logfile, weblog) #convert the logfile over to an HTML file
+                    
+                    ### Log the droid data to the central log ###
+                    df = pd.read_csv(destination_dir + "/" + fname[0] + "/droid_report.csv")
+                    
+                    # Add the new columns to add in the package data
+                    df['Package_Name'] = fname[0]
+                    df['Source_Organization'] = content[15].split(" ", 1)[1].strip()
+                    df['External-Identifier'] = content[10].split(" ", 1)[1].strip()
+                    df['Date'] = datetime.datetime.now()
+                    
+                    # Check if the output file already exists
+                    if os.path.exists(droid_log):
+                        # Append to the existing file without writing the header
+                        df.to_csv(droid_log, mode='a', index=False, header=False)
+                    else:
+                        # Create a new file with the header
+                        df.to_csv(droid_log, index=False)
+                    
                 except Exception as error:
                     print("Error inserting into logfile", error)
 
