@@ -5,7 +5,7 @@
 #
 #__author__      = "Paul Gallagher"
 #__copyright__   = "CC0 - openly shared into the public domain on behalf of MDPN"
-#__version__     = 0.6
+#__version__     = 0.7
 # Runs without any options ie python3 ./preprocess.py
 # Expects the below configuration directories exist and have contents to process
 # and that there is a titledb.xml file in the location specified. max_au_size sets the
@@ -13,6 +13,8 @@
 #
 # REQUIREMENTS:
 # requires pandas for html creation - pip install pandas
+# also requires droid: https://tna-cdn-live-uk.s3.eu-west-2.amazonaws.com/documents/droid-binary-6.8.0-bin.zip
+# droid uses java openjdk version 8 to 17, 17 tested here
 #########################################################
 
 import os
@@ -33,6 +35,10 @@ staging_url = "http://192.168.60.130/staging/"      #LOCKSS crawable URL
 logfile = "/var/www/html/mdpn/log/log.csv"          #creates on first run
 weblog = "/var/www/html/mdpn/log/log.html"          #updates per AU ie: as each log entry is added
 max_au_size = 5000000000   #50gb
+
+######## DROID Format Settings ########
+java_path = "/usr/lib/jvm/java-17-openjdk-amd64/bin/java"
+droid_path = "/home/aristotle23/droid/droid-command-line-6.8.0.jar"
 ###############################################################################3###
 
 ### functions
@@ -236,6 +242,7 @@ def process_tar_files(directory):
                 file_name = os.path.basename(file_path) #file name
                 fname = os.path.splitext(file_name)     #file name without path or ext in array
                 size = os.path.getsize(file_path)
+                new_file_path = os.path.join(root, fname[0]) #new file path after the tar is put into a folder with the logging files
                     
                 #validity checks
                 if is_web_safe_filename(fname[0]):      #check filename is websafe
@@ -265,15 +272,23 @@ def process_tar_files(directory):
                                     insert_into_titledb(content[15].split(" ", 1)[1].strip(), fname[0], content[10].split(" ", 1)[1].strip(), journal_title)    #publisher, fname, title, journal_title
                                 except Exception as error:
                                     print("Error inserting into titledb", error)
+                                    
+                                try: #try and run the droid format scan, generate reports
+                                    #generate the droid_report.csv file
+                                    subprocess.run([java_path, "-Xmx1024m", "-jar", droid_path, "-R", "-A", new_file_path, "-o", new_file_path + "/droid_report.csv" ], capture_output=True, text=True) 
+                                    #generate the droid_report.droid file
+                                    subprocess.run([java_path, "-Xmx1024m", "-jar", droid_path, "-R", "-A", new_file_path, "-p", new_file_path + "/droid_profile.droid" ], capture_output=True, text=True)
+                                except Exception as error:
+                                    print(f"Error conducting droid format scan", error)
                                 
                                 try: #try to move the file to production folder
                                     #note, ran into a bug below if the staging folder isn't created, dumps file contents in the desination root
-                                    au_folder = os.path.join(root, fname[0])
+                                    au_folder = new_file_path
                                     shutil.move(au_folder, destination_dir) #move into the production folder
                                     status = "Staged" #update status for the log to "Staged"
                                 except Exception as error:
-                                    print(f"Copy to production error, {file} may already exist, be uploading, or corrupted", error)
-                                    status = "Copy to production error, file may already exist, be uploading, or corrupted"
+                                    print(f"Error: Copy to production error, {file} may already exist, be uploading, or corrupted", error)
+                                    status = "Error: Copy to production error, file may already exist, be uploading, or corrupted"
                         else:
                             print(f"Error: ClamAV scan failed for {file_path}, file deleted")
                             os.remove(file_path) #remove file
