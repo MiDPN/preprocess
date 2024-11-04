@@ -1,0 +1,17 @@
+----------------------------------------------------------------
+Mon Nov 04 15:48:29 EST 2024:
+Booting Derby version The Apache Software Foundation - Apache Derby - 10.13.1.1 - (1765088): instance a816c00e-0192-f8ef-ac10-000001a6f110 
+on database directory /root/.droid6/profiles/1730753309319/db with class loader jdk.internal.loader.ClassLoaders$AppClassLoader@2cdf8d8a 
+Loaded from file:/home/aristotle23/droid/lib/derby-10.13.1.1.jar
+java.vendor=Ubuntu
+java.runtime.version=17.0.12+7-Ubuntu-1ubuntu222.04
+user.dir=/home/aristotle23/preprocess
+os.name=Linux
+os.arch=amd64
+os.version=5.15.153.1-microsoft-standard-WSL2
+derby.system.home=null
+derby.stream.error.file=/root/.droid6/logs/derby.log
+Database Class Loader started - derby.database.classpath=''
+----------------------------------------------------------------
+Mon Nov 04 15:48:35 EST 2024:
+Shutting down instance a816c00e-0192-f8ef-ac10-000001a6f110 on database directory /root/.droid6/profiles/1730753309319/db with class loader jdk.internal.loader.ClassLoaders$AppClassLoader@2cdf8d8a 

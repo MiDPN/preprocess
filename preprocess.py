@@ -23,10 +23,12 @@ import re
 import subprocess
 import tarfile
 import shutil
+import urllib.parse
 import xml.etree.ElementTree as ET
 import csv
 import datetime
 import pandas as pd
+import urllib 
 
 ############################## Configuration fields ################################
 source_dir = "/home/sftpuser/uploads/"  #works on all subfolders
@@ -175,9 +177,9 @@ def is_web_safe_filename(filename):
         return True
     return False
 
-def log_to_csv(filename, publisher, title, size, status, csv_filename=logfile):
+def log_to_csv(filename, publisher, title, size, status, au_id, csv_filename=logfile):
     # Define the header
-    headers = ["Date", "Package Name", "Source-Organization", "External-Identifier", "Size (B)", "Status"]
+    headers = ["Date", "Package Name", "Source-Organization", "External-Identifier", "Size (B)", "Status", "LOCKSS AU Id"]
     
     # Check if the CSV file already exists
     file_exists = False
@@ -196,14 +198,15 @@ def log_to_csv(filename, publisher, title, size, status, csv_filename=logfile):
             writer.writerow(headers)
         
         # Write the row with the provided information
-        writer.writerow([datetime.datetime.now(), filename, publisher, title, size, status])
+        writer.writerow([datetime.datetime.now(), filename, publisher, title, size, status, au_id])
 
 def csv_to_html(csv_filename, html_filename):
     # Read the CSV file into a DataFrame
     df = pd.read_csv(csv_filename)
+    df1 = df.drop("LOCKSS AU Id", axis="columns") #remove the au_id from the web interface
     
     # Convert DataFrame to HTML format with table styling
-    html_content = df.to_html(index=False, classes="table table-striped", border=0)
+    html_content = df1.to_html(index=False, classes="table table-striped", border=0)
     
     # Create a basic HTML structure and embed the table
     #should refactor this to use a single template
@@ -306,7 +309,7 @@ def process_tar_files(directory):
                 
                 #update the log, logging reports user "if" conditions, not exceptions which are admin side, except for production copy (duplicate)  
                 try: 
-                    log_to_csv(fname[0], content[15].split(" ", 1)[1].strip(), content[10].split(" ", 1)[1].strip(), size, status) #filename, publisher, title, size, status
+                    log_to_csv(fname[0], content[15].split(" ", 1)[1].strip(), content[10].split(" ", 1)[1].strip(), size, status, "edu|auburn|adpn|directory|AuburnDirectoryPlugin&base_url~" + urllib.parse.quote_plus(staging_url).replace(".", "%2E") + "&directory~" + fname[0]) #filename, publisher, title, size, status, au_id
                     csv_to_html(logfile, weblog) #convert the logfile over to an HTML file
                     
                     ### Log the droid data to the central log ###
@@ -317,6 +320,7 @@ def process_tar_files(directory):
                     df['Source_Organization'] = content[15].split(" ", 1)[1].strip()
                     df['External-Identifier'] = content[10].split(" ", 1)[1].strip()
                     df['Date'] = datetime.datetime.now()
+                    df['AU_Id'] = "edu|auburn|adpn|directory|AuburnDirectoryPlugin&base_url~" + urllib.parse.quote_plus(staging_url).replace(".", "%2E") + "&directory~" + fname[0] #add LOCKSS au_id
                     
                     # Check if the output file already exists
                     if os.path.exists(droid_log):
