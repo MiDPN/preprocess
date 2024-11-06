@@ -64,12 +64,12 @@ def extract_and_convert_manifest(tar_file_path, extract_to):
         
         #extract the bag-info file
         member = tar.getmember(fname[0] + '/bag-info.txt')
-        tar.extract(member, path=extract_to)
+        tar.extract(member, path=extract_to, filter='data')
         baginfo_file_path = os.path.join(extract_to, fname[0], 'bag-info.txt')
         
         #extract the manifest file
         member = tar.getmember(fname[0] + '/manifest-sha256.txt')
-        tar.extract(member, path=extract_to)
+        tar.extract(member, path=extract_to, filter='data')
         manifest_file_path = os.path.join(extract_to, fname[0], 'manifest-sha256.txt')
         
         #parse bag info, push bag-info fields into html manifest
