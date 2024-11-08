@@ -29,20 +29,11 @@ import csv
 import datetime
 import pandas as pd
 import urllib 
+import configparser
 
-############################## Configuration fields ################################
-source_dir = "/home/sftpuser/uploads/"  #works on all subfolders
-destination_dir = "/var/www/html/staging"
-titledb = "/var/www/html/mdpn/titledb/titledb.xml"  #this file needs to exist
-staging_url = "http://192.168.60.130/staging/"      #LOCKSS crawable URL
-logfile = "/var/www/html/mdpn/log/log.csv"          #creates on first run
-weblog = "/var/www/html/mdpn/log/log.html"          #updates per AU ie: as each log entry is added
-max_au_size = 5000000000   #50gb
-
-######## DROID Format Settings ########
-java_path = "/usr/lib/jvm/java-17-openjdk-amd64/bin/java"
-droid_path = "/home/aristotle23/droid/droid-command-line-6.8.0.jar"
-droid_log = "/var/www/html/mdpn/log/droid_log.csv"
+############################## Obtain configuration file ################################
+config = configparser.ConfigParser()
+config.read('config.ini')
 ###############################################################################3###
 
 ### functions
@@ -55,7 +46,7 @@ def run_clamav_scan(file_path):
 #has the file size definitions below 1byte to 50gb valid
 def is_right_size(file_path):
     file_size = os.path.getsize(file_path)
-    return file_size > 0 and file_size < max_au_size
+    return file_size > 0 and file_size < int(config['DEFAULT']['max_au_size'])
 
 def extract_and_convert_manifest(tar_file_path, extract_to):
     with tarfile.open(tar_file_path) as tar:
@@ -64,19 +55,19 @@ def extract_and_convert_manifest(tar_file_path, extract_to):
         
         #extract the bag-info file
         member = tar.getmember(fname[0] + '/bag-info.txt')
-        tar.extract(member, path=extract_to)
+        tar.extract(member, path=extract_to, filter='data')
         baginfo_file_path = os.path.join(extract_to, fname[0], 'bag-info.txt')
         
         #extract the manifest file
         member = tar.getmember(fname[0] + '/manifest-sha256.txt')
-        tar.extract(member, path=extract_to)
+        tar.extract(member, path=extract_to, filter='data')
         manifest_file_path = os.path.join(extract_to, fname[0], 'manifest-sha256.txt')
         
         #parse bag info, push bag-info fields into html manifest
         with open(baginfo_file_path, 'r') as file:
             content = file.readlines()
 
-        url = staging_url + fname[0]
+        url = config['DEFAULT']['staging_url'] + fname[0]
         convert_to_html(manifest_file_path, baginfo_file_path, url, content[10].split(" ", 1)[1].strip()) #manifest_file_path, baginfo_file_path, url, title   
     return True
 
@@ -101,7 +92,7 @@ def convert_to_html(manifest_file_path, baginfo_file_path, url, title):
 
 def insert_into_titledb(publisher, fname, title, journal_title):
         #load the file
-        tree = ET.parse(titledb)
+        tree = ET.parse(config['DEFAULT']['titledb'])
         root = tree.getroot()
         parent_element = root.findall("property") 
         
@@ -144,7 +135,7 @@ def insert_into_titledb(publisher, fname, title, journal_title):
         param1.append(sub_param1)
         sub_param11 = ET.Element('property')
         sub_param11.attrib["name"] = "value"
-        sub_param11.attrib["value"] = staging_url
+        sub_param11.attrib["value"] = config['DEFAULT']['staging_url']
         param1.append(sub_param11)
         new_au.append(param1)
         
@@ -165,7 +156,7 @@ def insert_into_titledb(publisher, fname, title, journal_title):
         #merge into the main element
         parent_element[1].append(new_au) #append to the second instance of property
         ET.indent(tree, space="\t", level=0)
-        tree.write(titledb, encoding='utf-8')
+        tree.write(config['DEFAULT']['titledb'], encoding='utf-8')
 
 def is_web_safe_filename(filename):
     #check to see if a filename is websafe
@@ -177,7 +168,7 @@ def is_web_safe_filename(filename):
         return True
     return False
 
-def log_to_csv(filename, publisher, title, size, status, au_id, csv_filename=logfile):
+def log_to_csv(filename, publisher, title, size, status, au_id, csv_filename=config['DEFAULT']['logfile']):
     # Define the header
     headers = ["Date", "Package Name", "Source-Organization", "External-Identifier", "Size (B)", "Status", "LOCKSS AU Id"]
     
@@ -280,7 +271,7 @@ def process_tar_files(directory):
                                     
                                 try: #try and run the droid format scan, generate reports
                                     #generate the droid_report.csv file
-                                    result = subprocess.run([java_path, "-Xmx1024m", "-jar", droid_path, "-R", "-A", new_file_path, "-o", new_file_path + "/droid_report.csv" ], capture_output=True, text=True)                                   
+                                    result = subprocess.run([config['DROID']['java_path'], "-Xmx1024m", "-jar", config['DROID']['droid_path'], "-R", "-A", new_file_path, "-o", new_file_path + "/droid_report.csv" ], capture_output=True, text=True)                                   
                                     #generate the droid_report.droid file, not really sure we need this... 
                                     # subprocess.run([java_path, "-Xmx1024m", "-jar", droid_path, "-R", "-A", new_file_path, "-p", new_file_path + "/droid_profile.droid" ], capture_output=True, text=True)
                                 except Exception as error:
@@ -288,7 +279,7 @@ def process_tar_files(directory):
                                 
                                 try: #try to move the file to production folder
                                     #note, ran into a bug below if the staging folder isn't created, dumps file contents in the desination root
-                                    shutil.move(new_file_path, destination_dir)     #move into the production folder
+                                    shutil.move(new_file_path, config['DEFAULT']['destination_dir'])     #move into the production folder
                                     status = "Staged"                           #update status for the log to "Staged"
                                 except Exception as error:
                                     print(f"Error: Copy to production error, {file} may already exist, be uploading, or corrupted", error)
@@ -299,7 +290,7 @@ def process_tar_files(directory):
                             os.remove(file_path + '-clamav.txt') #remove the scan results file
                             status = "Error: ClamAV scan failed, file deleted"
                     else:
-                        print(f"Error: {file_path} is either zero bytes or greater than {max_au_size}, file deleted")
+                        print(f"Error: {file_path} is either zero bytes or greater than {config['DEFAULT']['max_au_size']}, file deleted")
                         os.remove(file_path) #remove file
                         status = "Error: File is either zero bytes or greater than max size"
                 else:
@@ -309,30 +300,30 @@ def process_tar_files(directory):
                 
                 #update the log, logging reports user "if" conditions, not exceptions which are admin side, except for production copy (duplicate)  
                 try: 
-                    log_to_csv(fname[0], content[15].split(" ", 1)[1].strip(), content[10].split(" ", 1)[1].strip(), size, status, "edu|auburn|adpn|directory|AuburnDirectoryPlugin&base_url~" + urllib.parse.quote_plus(staging_url).replace(".", "%2E") + "&directory~" + fname[0]) #filename, publisher, title, size, status, au_id
-                    csv_to_html(logfile, weblog) #convert the logfile over to an HTML file
+                    log_to_csv(fname[0], content[15].split(" ", 1)[1].strip(), content[10].split(" ", 1)[1].strip(), size, status, "edu|auburn|adpn|directory|AuburnDirectoryPlugin&base_url~" + urllib.parse.quote_plus(config['DEFAULT']['staging_url']).replace(".", "%2E") + "&directory~" + fname[0]) #filename, publisher, title, size, status, au_id
+                    csv_to_html(config['DEFAULT']['logfile'], config['DEFAULT']['weblog']) #convert the logfile over to an HTML file
                     
                     ### Log the droid data to the central log ###
-                    df = pd.read_csv(destination_dir + "/" + fname[0] + "/droid_report.csv")
+                    df = pd.read_csv(config['DEFAULT']['destination_dir'] + "/" + fname[0] + "/droid_report.csv")
                     
                     # Add the new columns to add in the package data
                     df['Package_Name'] = fname[0]
                     df['Source_Organization'] = content[15].split(" ", 1)[1].strip()
                     df['External-Identifier'] = content[10].split(" ", 1)[1].strip()
                     df['Date'] = datetime.datetime.now()
-                    df['AU_Id'] = "edu|auburn|adpn|directory|AuburnDirectoryPlugin&base_url~" + urllib.parse.quote_plus(staging_url).replace(".", "%2E") + "&directory~" + fname[0] #add LOCKSS au_id
+                    df['AU_Id'] = "edu|auburn|adpn|directory|AuburnDirectoryPlugin&base_url~" + urllib.parse.quote_plus(config['DEFAULT']['staging_url']).replace(".", "%2E") + "&directory~" + fname[0] #add LOCKSS au_id
                     
                     # Check if the output file already exists
-                    if os.path.exists(droid_log):
+                    if os.path.exists(config['DROID']['droid_log']):
                         # Append to the existing file without writing the header
-                        df.to_csv(droid_log, mode='a', index=False, header=False)
+                        df.to_csv(config['DROID']['droid_log'], mode='a', index=False, header=False)
                     else:
                         # Create a new file with the header
-                        df.to_csv(droid_log, index=False)
+                        df.to_csv(config['DROID']['droid_log'], index=False)
                     
                 except Exception as error:
                     print("Error inserting into logfile", error)
 
 if __name__ == "__main__":
     #do the main processing process_tar_files
-    process_tar_files(source_dir)
+    process_tar_files(config['DEFAULT']['source_dir'])
