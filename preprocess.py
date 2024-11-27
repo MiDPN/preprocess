@@ -33,7 +33,7 @@ import configparser
 
 ############################## Obtain configuration file ################################
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read(os.path.join(os.path.dirname(__file__),'config.ini'))
 ###############################################################################3###
 
 ### functions
