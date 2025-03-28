@@ -327,3 +327,4 @@ def process_tar_files(directory):
 if __name__ == "__main__":
     #do the main processing process_tar_files
     process_tar_files(config['DEFAULT']['source_dir'])
+
