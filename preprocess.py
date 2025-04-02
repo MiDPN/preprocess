@@ -5,7 +5,7 @@
 #
 #__author__      = "Paul Gallagher"
 #__copyright__   = "CC0 - openly shared into the public domain on behalf of MDPN"
-#__version__     = 0.7
+#__version__     = 0.8 - April 2025
 # Runs without any options ie python3 ./preprocess.py
 # Expects the below configuration directories exist and have contents to process
 # and that there is a titledb.xml file in the location specified. max_au_size sets the
@@ -30,6 +30,7 @@ import datetime
 import pandas as pd
 import urllib 
 import configparser
+import time
 
 ############################## Obtain configuration file ################################
 config = configparser.ConfigParser()
@@ -93,6 +94,7 @@ def convert_to_html(manifest_file_path, baginfo_file_path, url, title):
 def insert_into_titledb(publisher, fname, title, journal_title):
         #load the file
         tree = ET.parse(config['DEFAULT']['titledb'])
+        tree.write(config['DEFAULT']['titledb'] + '_' + time.strftime("%Y%m%d-%H%M%S"), encoding='utf-8')  #backup the file with a date, copies for each au loaded
         root = tree.getroot()
         parent_element = root.findall("property") 
         
