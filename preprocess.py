@@ -163,7 +163,7 @@ def insert_into_titledb(publisher, fname, title, journal_title):
 def is_web_safe_filename(filename):
     #check to see if a filename is websafe
     # Define a regular expression for a web-safe file name
-    pattern = r'^[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9]$'
+    pattern = r'^[a-zA-Z0-9][a-zA-Z0-9_-]*[a-zA-Z0-9]$' #do not include periods
     
     # Check if the filename matches the pattern
     if re.match(pattern, filename) and not filename.startswith(('.', '-')) and not filename.endswith(('.', '-')):
