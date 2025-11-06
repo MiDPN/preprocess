@@ -1,2 +1,7 @@
 config.ini
 derby.log
+scripts/test_reset.py
+.github/copilot-instructions.md
+scripts/check_config.py
+scripts/validation_report.json
+__pycache__/preprocess.cpython-312.pyc
