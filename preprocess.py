@@ -166,6 +166,20 @@ def insert_into_titledb(publisher, fname, title, journal_title):
         sub_param21.attrib["value"] = fname
         param2.append(sub_param21)
         new_au.append(param2)
+
+        #param.99 (fname)
+        param99 = ET.Element('property')
+        param99.attrib["name"] = "param.99"
+        #subelements
+        sub_param99 = ET.Element('property')
+        sub_param99.attrib["name"] = "key"
+        sub_param99.attrib["value"] = "pub_down"
+        param99.append(sub_param99)
+        sub_param991 = ET.Element('property')
+        sub_param991.attrib["name"] = "value"
+        sub_param991.attrib["value"] = "false"
+        param99.append(sub_param991)
+        new_au.append(param99)
         
         #merge into the main element
         parent_element[1].append(new_au) #append to the second instance of property
