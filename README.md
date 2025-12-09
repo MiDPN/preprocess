@@ -33,6 +33,12 @@ This script is designed to automate the processing of archival units (AUs) for L
 
 ### Python Dependencies
 
+Create a virtual environment:
+  ```python -m venv venv
+  ```
+Activate the virtual environment:
+  ```source venv/bin/activate
+  ```
 Install Python dependencies using:
 ```bash
 pip install -r requirements.txt
@@ -79,6 +85,15 @@ sudo systemctl enable clamav-daemon
 ```
 
 ### 3. Install Python Dependencies
+
+# Create a virtual environment:
+  ```bash
+  python -m venv venv
+  ```
+# Activate the virtual environment:
+  ```bash
+  source venv/bin/activate
+  ```
 
 ```bash
 cd /path/to/preprocess
@@ -389,6 +404,80 @@ fi
 ```
 
 See [scripts/README.md](scripts/README.md) for complete validation documentation.
+
+## LOCKSS Node Management
+
+### add_aus_to_nodes.py
+
+This script automates adding Archival Units to LOCKSS nodes by parsing the titledb.xml and submitting AUIDs to configured servers.
+
+#### What It Does
+
+1. Fetches titledb.xml from the configured `titledb_url`
+2. Parses AU entries where `pub_down='false'` (ready for preservation)
+3. Generates AUIDs using the LOCKSS-compatible encoding format
+4. Submits AUIDs to all configured LOCKSS servers via the `/ws/aus/add` API
+
+#### Configuration
+
+Requires the `[LOCKSS]` section in config.ini:
+
+```ini
+[LOCKSS]
+# Comma-separated list of LOCKSS server base URLs
+servers = http://lockss1.example.org:24620, http://lockss2.example.org:24620
+
+# Authentication credentials (shared across all servers)
+username = lockss
+password = your_password
+```
+
+Also requires `titledb_url` in the `[DEFAULT]` section:
+
+```ini
+[DEFAULT]
+titledb_url = http://your-server/titledb/titledb.xml
+```
+
+#### Dependencies
+
+Requires the `lockss-pybasic` package:
+
+```bash
+pip install lockss-pybasic
+```
+
+Or install via requirements.txt which includes this dependency.
+
+#### Usage
+
+```bash
+# Run with the virtual environment
+./venv/bin/python3 add_aus_to_nodes.py
+```
+
+#### Output
+
+The script displays:
+- Each AU name, plugin, parameters, and generated AUID
+- Submission status for each LOCKSS server
+- Server responses indicating success or "Already Exists" for duplicates
+
+#### Example Output
+
+```
+Fetching titledb from: http://192.168.56.9/titledb/titledb.xml
+Found 10 AU entries
+================================================================================
+AU: Example_Collection_2025
+  Plugin: edu.auburn.adpn.directory.AuburnDirectoryPlugin
+  Params: {'base_url': 'https://staging.example.org/staged/', 'directory': 'Example_Collection_2025'}
+  AUID: edu|auburn|adpn|directory|AuburnDirectoryPlugin&base_url~https%3A%2F%2Fstaging%2Eexample%2Eorg%2Fstaged%2F&directory~Example_Collection_2025
+--------------------------------------------------------------------------------
+
+Submitting 10 AUIDs to http://lockss1.example.org:24620/ws/aus/add...
+Status: 200 | Response: [{"id":"...","isSuccess":true,"message":"Added"}]
+```
 
 ## Troubleshooting
 
